@@ -8,10 +8,15 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "deploy": "npm run build && npm run start",
+    "deploy:railway": "railway up"
   },
   "dependencies": {
     "fastify": "^5.3.2",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/jwt": "^9.0.0",
+    "@supabase/supabase-js": "^2.45.0",
     "drizzle-orm": "^0.40.0",
     "postgres": "^3.4.5",
     "xlsx": "^0.18.5",

@@ -37,3 +37,11 @@ coverage
 
 # Misc
 *.tsbuildinfo
+*.test.ts
+*.spec.ts
+
+# Railway
+.railway
+
+# Supabase
+.supabase

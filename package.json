@@ -1,9 +1,7 @@
 {
   "name": "tdf-estoque",
   "private": true,
-  "workspaces": [
-    "apps/*"
-  ],
+  "workspaces": ["apps/*"],
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
