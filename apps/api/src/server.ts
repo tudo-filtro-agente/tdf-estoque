@@ -6,6 +6,7 @@ import { healthRoutes } from './routes/health'
 import { bootstrapRoutes } from './routes/bootstrap'
 import { authRoutes } from './routes/auth'
 import { produtosRoutes } from './routes/produtos'
+import { importarRoutes } from './routes/importar'
 
 export async function buildServer() {
   const fastify = Fastify({
@@ -27,6 +28,7 @@ export async function buildServer() {
   await fastify.register(bootstrapRoutes)
   await fastify.register(authRoutes, { prefix: '/api/auth' })
   await fastify.register(produtosRoutes, { prefix: '/api/produtos' })
+  await fastify.register(importarRoutes, { prefix: '/api/produtos/importar' })
 
   return fastify
 }

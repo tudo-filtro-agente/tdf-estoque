@@ -152,6 +152,38 @@ export async function deleteProduto(id: number): Promise<void> {
   if (error) throw error
 }
 
+export const produtosService = {
+  async listarProdutos(params: { fonteId?: string; pagina?: number; limite?: number }) {
+    const { pagina = 1, limite = 50 } = params
+    const result = await listProdutos({
+      page: pagina,
+      limit: limite,
+    })
+    return {
+      produtos: result.data,
+      total: result.total,
+      pagina: result.page,
+      limite: result.limit,
+    }
+  },
+
+  async buscarProduto(id: string) {
+    return await getProduto(parseInt(id))
+  },
+
+  async criarProduto(data: Record<string, unknown>) {
+    return await createProduto(data as CreateProdutoInput)
+  },
+
+  async atualizarProduto(id: string, data: Record<string, unknown>) {
+    return await updateProduto(parseInt(id), data as Partial<CreateProdutoInput>)
+  },
+
+  async deletarProduto(id: string) {
+    await deleteProduto(parseInt(id))
+  },
+}
+
 export async function getCategorias(empresaId: number = 1): Promise<string[]> {
   const { data, error } = await supabaseAdmin
     .from('produtos')
