@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { requireAuth } from '../middleware/auth'
-import { processImport, processAllSheets, generateTemplateBuffer, generateTDFTemplateBuffer, parseExcel } from '../services/importar'
+import { requireAuth } from '../middleware/auth.js'
+import { processImport, processAllSheets, generateTemplateBuffer, generateTDFTemplateBuffer, parseExcel } from '../services/importar.js'
 
 export async function importarRoutes(fastify: FastifyInstance) {
 

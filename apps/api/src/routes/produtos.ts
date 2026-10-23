@@ -1,16 +1,23 @@
 import { FastifyInstance } from 'fastify'
-import { produtosService } from '../services/produtos'
+import { requireAuth } from '../middleware/auth.js'
+import { produtosService } from '../services/produtos.js'
 
 export async function produtosRoutes(fastify: FastifyInstance) {
+  // Toda rota de produtos exige sessão. A API usa service_role (bypassa RLS),
+  // então a autenticação precisa acontecer aqui — não no banco.
+  fastify.addHook('preHandler', requireAuth)
+
   // Listar produtos
   fastify.get('/', async (request) => {
-    const { fonteId, pagina = 1, limite = 50 } = request.query as {
+    const { fonteId, pagina = 1, limite = 50, busca, categoria } = request.query as {
       fonteId?: string
       pagina?: number
       limite?: number
+      busca?: string
+      categoria?: string
     }
 
-    return await produtosService.listarProdutos({ fonteId, pagina, limite })
+    return await produtosService.listarProdutos({ fonteId, pagina, limite, busca, categoria })
   })
 
   // Buscar produto por ID
@@ -32,8 +39,9 @@ export async function produtosRoutes(fastify: FastifyInstance) {
     try {
       const produto = await produtosService.criarProduto(data)
       return reply.status(201).send(produto)
-    } catch (error) {
-      return reply.status(400).send({ error: 'Erro ao criar produto' })
+    } catch (error: any) {
+      console.error('[POST /produtos]', error)
+      return reply.status(400).send({ error: error?.message || 'Erro ao criar produto' })
     }
   })
 
@@ -45,8 +53,9 @@ export async function produtosRoutes(fastify: FastifyInstance) {
     try {
       const produto = await produtosService.atualizarProduto(id, data)
       return produto
-    } catch (error) {
-      return reply.status(400).send({ error: 'Erro ao atualizar produto' })
+    } catch (error: any) {
+      console.error('[PUT /produtos/:id]', error)
+      return reply.status(400).send({ error: error?.message || 'Erro ao atualizar produto' })
     }
   })
 
@@ -58,6 +67,7 @@ export async function produtosRoutes(fastify: FastifyInstance) {
       await produtosService.deletarProduto(id)
       return { message: 'Produto deletado com sucesso' }
     } catch (error) {
+      console.error('[DELETE /produtos/:id]', error)
       return reply.status(400).send({ error: 'Erro ao deletar produto' })
     }
   })

@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { supabase } from '../db'
+import { supabase } from '../db.js'
 
 export async function bootstrapRoutes(fastify: FastifyInstance) {
   fastify.get('/api/bootstrap', async () => {

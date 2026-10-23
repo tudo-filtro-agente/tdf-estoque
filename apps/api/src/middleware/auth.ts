@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
-import { supabaseAdmin } from '../db'
+import { supabaseAdmin } from '../db.js'
 
 export interface AuthUser {
   id: number
@@ -68,7 +68,20 @@ export async function requireAuth(
       })
     }
 
-    request.usuario = session.usuario as AuthUser
+    // O select aninhado do Supabase devolve o usuario como lista;
+    // normalizamos para o objeto unico esperado por AuthUser.
+    const usuario = (Array.isArray(session.usuario)
+      ? session.usuario[0]
+      : session.usuario) as unknown as AuthUser
+
+    if (!usuario) {
+      return reply.status(401).send({
+        error: 'Não autorizado',
+        message: 'Sessão inválida'
+      })
+    }
+
+    request.usuario = usuario
 
   } catch (err) {
     return reply.status(401).send({
@@ -87,4 +100,31 @@ function hashToken(token: string): string {
     hash = hash & hash
   }
   return hash.toString(16)
+}
+
+/**
+ * Exige que o usuário autenticado tenha um dos perfis informados.
+ * Usar SEMPRE depois de requireAuth — não verifica token sozinho.
+ *
+ * A API usa service_role (bypassa RLS), então toda autorização de perfil
+ * acontece aqui no backend, não no banco.
+ */
+export function requirePerfil(perfis: string[]) {
+  return async function (request: FastifyRequest, reply: FastifyReply) {
+    const usuario = request.usuario
+
+    if (!usuario) {
+      return reply.status(401).send({
+        error: 'Não autorizado',
+        message: 'Token de autenticação não fornecido'
+      })
+    }
+
+    if (!perfis.includes(usuario.perfil)) {
+      return reply.status(403).send({
+        error: 'Acesso negado',
+        message: `Esta ação exige perfil: ${perfis.join(' ou ')}`
+      })
+    }
+  }
 }

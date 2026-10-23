@@ -9,10 +9,10 @@ Sistema para gestao de estoque de filtros e produtos para tratamento de agua. Pe
 ## Stack Tecnologica
 
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v3 + shadcn/ui
-- **Backend**: Fastify (Node.js) + Drizzle ORM
+- **Backend**: hoje Fastify + supabase-js; alvo é Supabase Edge Functions
 - **Database**: PostgreSQL via Supabase
-- **Autenticacao**: Supabase Auth
-- **Deploy**: Vercel (Web) + Railway (API)
+- **Autenticacao**: hoje custom (bcrypt + tabela `sessoes`); alvo é Supabase Auth
+- **Deploy**: Vercel (Web) + Supabase (Edge Functions + Postgres)
 
 ## Arquitetura
 
@@ -88,8 +88,15 @@ npm run dev         # Frontend React (porta 5173)
 
 ## Deploy
 
-- **Frontend**: Deploy automatico via Vercel ao fazer push na branch `main`
-- **API**: Deploy automatico via Railway ao fazer push na branch `main`
+- **Frontend**: Vercel (estático)
+- **Backend**: Supabase Edge Functions (serverless)
+- **Database**: Supabase Postgres
+- **Deploy automatico**: push na branch `main`
+
+> A API ainda roda como Fastify em `apps/api` (porta 3001) para desenvolvimento
+> local. A migracao para Edge Functions esta pendente. `railway.toml` e `Dockerfile`
+> no raiz sao resquicios de uma montagem inicial e estao errados: este projeto nao
+> usa Railway.
 
 ## Contexto
 

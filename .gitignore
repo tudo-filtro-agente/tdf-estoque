@@ -45,3 +45,16 @@ coverage
 
 # Supabase
 .supabase
+
+# Scripts de investigacao descartaveis (dumps e checks pontuais).
+# Ajudam durante a sessao, nao sao parte do produto.
+apps/api/scripts/dump*.ts
+apps/api/scripts/final*.ts
+apps/api/scripts/parse-atual.ts
+apps/api/scripts/schema-check.ts
+apps/api/scripts/check-cols.ts
+apps/api/scripts/detalhe-por-aba.ts
+apps/api/scripts/diff-final.ts
+apps/api/scripts/confirmar-divergencias.ts
+apps/api/scripts/comparar-planilha.ts
+apps/api/_parse_check.ts

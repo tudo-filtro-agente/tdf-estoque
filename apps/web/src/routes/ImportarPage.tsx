@@ -4,12 +4,7 @@ import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, X, Download, Table, 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
-
-interface SheetInfo {
-  name: string
-  rowCount: number
-  columns: string[]
-}
+import { api } from '../lib/api'
 
 interface SheetResult {
   sheet: string
@@ -37,7 +32,6 @@ export default function ImportarPage() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<ImportResult | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [selectedSheets, setSelectedSheets] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -52,20 +46,18 @@ export default function ImportarPage() {
   const previewMutation = useMutation({
     mutationFn: async ({ file, allSheets = false }: { file: File; allSheets?: boolean }) => {
       const base64 = await fileToBase64(file)
-      return fetch('/api/produtos/importar', {
+      return api<ImportResult>('/api/produtos/importar', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({ file: base64.split(',')[1], dryRun: true, allSheets }),
-      }).then(r => r.json())
+        body: { file: base64.split(',')[1], dryRun: true, allSheets },
+      })
     },
     onSuccess: (data) => {
       setPreview(data)
-      // Selecionar todas as abas por padrão se for allSheets
-      if (data.results) {
-        setSelectedSheets(data.results.map((r: SheetResult) => r.sheet))
+    },
+    onError: (err: Error) => {
+      setPreview(null)
+      if (err.message !== 'Sessão expirada') {
+        alert('Erro ao processar planilha: ' + err.message)
       }
     },
   })
@@ -73,17 +65,18 @@ export default function ImportarPage() {
   const importMutation = useMutation({
     mutationFn: async ({ file, allSheets = false }: { file: File; allSheets?: boolean }) => {
       const base64 = await fileToBase64(file)
-      return fetch('/api/produtos/importar', {
+      return api<ImportResult>('/api/produtos/importar', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({ file: base64.split(',')[1], dryRun: false, allSheets }),
-      }).then(r => r.json())
+        body: { file: base64.split(',')[1], dryRun: false, allSheets },
+      })
     },
     onSuccess: (data) => {
       setPreview(data)
+    },
+    onError: (err: Error) => {
+      if (err.message !== 'Sessão expirada') {
+        alert('Erro ao importar: ' + err.message)
+      }
     },
   })
 
@@ -92,18 +85,17 @@ export default function ImportarPage() {
       const endpoint = tdf ? '/api/produtos/importar/template-tdf' : '/api/produtos/importar/template'
       const filename = tdf ? 'template-tdf-estoque.xlsx' : 'template-importacao.xlsx'
 
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-      })
-      const blob = await response.blob()
+      const blob = await api<Blob>(endpoint, { responseType: 'blob' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = filename
       a.click()
       window.URL.revokeObjectURL(url)
-    } catch (error) {
-      alert('Erro ao baixar template')
+    } catch (error: any) {
+      if (error?.message !== 'Sessão expirada') {
+        alert('Erro ao baixar template')
+      }
     }
   }
 
@@ -133,7 +125,6 @@ export default function ImportarPage() {
   const resetImport = () => {
     setFile(null)
     setPreview(null)
-    setSelectedSheets([])
   }
 
   const getCategoryBadgeColor = (categoria?: string) => {
@@ -229,7 +220,7 @@ export default function ImportarPage() {
                   <CardContent className="pt-6">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-slate-900">
-                        {preview.summary?.total || preview.total}
+                        {preview.summary?.total ?? preview.total ?? 0}
                       </p>
                       <p className="text-sm text-slate-500">Total de Linhas</p>
                     </div>
@@ -239,7 +230,7 @@ export default function ImportarPage() {
                   <CardContent className="pt-6">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-green-600">
-                        {preview.summary?.importados || preview.importados}
+                        {preview.summary?.importados ?? preview.importados ?? 0}
                       </p>
                       <p className="text-sm text-slate-500">Prontos para Importar</p>
                     </div>
@@ -249,7 +240,7 @@ export default function ImportarPage() {
                   <CardContent className="pt-6">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-amber-600">
-                        {(preview.summary?.erros || preview.erros.length) + preview.duplicados}
+                        {(preview.summary?.erros ?? preview.erros?.length ?? 0) + (preview.duplicados ?? 0)}
                       </p>
                       <p className="text-sm text-slate-500">Com Problemas</p>
                     </div>
@@ -259,7 +250,7 @@ export default function ImportarPage() {
                   <CardContent className="pt-6">
                     <div className="text-center">
                       <p className="text-3xl font-bold text-primary">
-                        {preview.results?.length || 1}
+                        {preview.results?.length ?? 1}
                       </p>
                       <p className="text-sm text-slate-500">Abas</p>
                     </div>
@@ -372,7 +363,7 @@ export default function ImportarPage() {
               )}
 
               {/* Errors */}
-              {(preview.erros.length > 0 || preview.results?.some(r => r.erros.length > 0)) && (
+              {((preview.erros?.length || 0) > 0 || (preview.results || []).some(r => (r.erros?.length || 0) > 0)) && (
                 <Card className="border-red-200">
                   <CardHeader className="bg-red-50 border-b">
                     <CardTitle className="text-lg text-red-700 flex items-center gap-2">
@@ -391,8 +382,11 @@ export default function ImportarPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y">
-                          {(preview.results || [{ erros: preview.erros, sheet: preview.sheet }])
-                            .flatMap((r: any) => r.erros.map((err: any) => ({ ...err, sheet: r.sheet })))
+                          {(preview.results && preview.results.length > 0
+                            ? preview.results
+                            : [{ erros: preview.erros || [], sheet: preview.sheet || 'Geral' }]
+                          )
+                            .flatMap((r: any) => (r.erros || []).map((err: any) => ({ ...err, sheet: r.sheet })))
                             .slice(0, 20)
                             .map((err: any, i: number) => (
                               <tr key={i} className="text-sm">
@@ -411,7 +405,7 @@ export default function ImportarPage() {
               )}
 
               {/* Success message */}
-              {!preview.dryRun && preview.importados > 0 && (
+              {!preview.dryRun && (preview.summary?.importados ?? preview.importados ?? 0) > 0 && (
                 <Card className="border-green-200 bg-green-50">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3 text-green-700">

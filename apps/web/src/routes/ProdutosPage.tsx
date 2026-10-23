@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, Produto } from '../lib/api'
+import { api, type Produto, type Unidade, type Localizacao } from '../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -24,13 +24,27 @@ function ProdutoModal({
     unidade: produto?.unidade || 'UN',
     categoria: produto?.categoria || '',
     ncm: produto?.ncm || '',
+    gtin: produto?.gtin || '',
     preco_custo: produto?.preco_custo || 0,
     preco_venda: produto?.preco_venda || 0,
     estoque_minimo: produto?.estoque_minimo || 0,
+    estoque_maximo: produto?.estoque_maximo || 0,
     localizacao: produto?.localizacao || '',
   })
 
   const queryClient = useQueryClient()
+
+  const { data: unData } = useQuery({
+    queryKey: ['unidades'],
+    queryFn: () => api<{ unidades: Unidade[] }>('/api/unidades'),
+  })
+  const { data: locData } = useQuery({
+    queryKey: ['localizacoes'],
+    queryFn: () => api<{ localizacoes: Localizacao[] }>('/api/localizacoes'),
+  })
+
+  const unidades = (unData?.unidades || []).filter(u => u.ativa)
+  const localizacoes = (locData?.localizacoes || []).filter(l => l.ativa)
 
   const mutation = useMutation({
     mutationFn: async (data: typeof form) => {
@@ -72,12 +86,12 @@ function ProdutoModal({
                   onChange={(e) => setForm({...form, unidade: e.target.value})}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="UN">UN - Unidade</option>
-                  <option value="KG">KG - Quilograma</option>
-                  <option value="LT">LT - Litro</option>
-                  <option value="MT">MT - Metro</option>
-                  <option value="M2">M2 - Metro Quadrado</option>
-                  <option value="M3">M3 - Metro Cúbico</option>
+                  <option value="UN">UN — Unidade</option>
+                  {unidades.map(u => (
+                    <option key={u.id} value={u.sigla}>
+                      {u.sigla}{u.descricao ? ` — ${u.descricao}` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -124,8 +138,38 @@ function ProdutoModal({
                 <Input type="number" value={form.estoque_minimo} onChange={(e) => setForm({...form, estoque_minimo: parseFloat(e.target.value) || 0})} />
               </div>
               <div className="space-y-2">
+                <label className="text-sm font-medium">Estoque Máximo</label>
+                <Input type="number" value={form.estoque_maximo} onChange={(e) => setForm({...form, estoque_maximo: parseFloat(e.target.value) || 0})} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Localização</label>
-                <Input value={form.localizacao} onChange={(e) => setForm({...form, localizacao: e.target.value})} placeholder="Prateleira A-1" />
+                {localizacoes.length > 0 ? (
+                  <select
+                    value={form.localizacao}
+                    onChange={(e) => setForm({...form, localizacao: e.target.value})}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">— sem localização —</option>
+                    {localizacoes.map(l => (
+                      <option key={l.id} value={l.codigo}>
+                        {l.codigo}{l.descricao ? ` — ${l.descricao}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    value={form.localizacao}
+                    onChange={(e) => setForm({...form, localizacao: e.target.value})}
+                    placeholder="Prateleira A-1"
+                  />
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">GTIN / EAN</label>
+                <Input value={form.gtin} onChange={(e) => setForm({...form, gtin: e.target.value})} placeholder="789xxxxxxxxxxx" />
               </div>
             </div>
 
@@ -151,24 +195,23 @@ export default function ProdutosPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['produtos', busca, categoria],
-    queryFn: () => api<{ data: Produto[], total: number }>('/api/produtos', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-      }
-    }),
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (busca) params.set('busca', busca)
+      if (categoria) params.set('categoria', categoria)
+      params.set('limite', '100')
+      return api<{ produtos: Produto[]; total: number }>(`/api/produtos?${params}`)
+    },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api(`/api/produtos/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-    }),
+    mutationFn: (id: number) => api(`/api/produtos/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['produtos'] })
     },
   })
 
-  const produtos = data?.data || []
+  const produtos = data?.produtos || []
   const categorias = [...new Set(produtos.map(p => p.categoria).filter(Boolean))]
 
   const formatCurrency = (value?: number) => {
@@ -240,6 +283,8 @@ export default function ProdutosPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nome</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Categoria</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Un</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Saldo</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Mín / Máx</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Custo</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Venda</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
@@ -253,6 +298,24 @@ export default function ProdutosPage() {
                       <td className="px-4 py-3 text-sm">{produto.nome}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{produto.categoria || '-'}</td>
                       <td className="px-4 py-3 text-sm">{produto.unidade}</td>
+                      <td className="px-4 py-3 text-sm text-right">
+                        {produto.saldo_atual != null ? (
+                          <Badge
+                            variant={
+                              produto.estoque_minimo != null && produto.saldo_atual <= produto.estoque_minimo
+                                ? 'warning'
+                                : 'success'
+                            }
+                          >
+                            {produto.saldo_atual}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-slate-600">
+                        {produto.estoque_minimo ?? 0} / {produto.estoque_maximo ?? '—'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-right">{formatCurrency(produto.preco_custo)}</td>
                       <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(produto.preco_venda)}</td>
                       <td className="px-4 py-3">

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../db'
+import { supabaseAdmin } from '../db.js'
 
 export interface Produto {
   id: number
@@ -15,6 +15,8 @@ export interface Produto {
   markup_padrao?: number
   estoque_minimo?: number
   estoque_maximo?: number
+  saldo_atual?: number
+  saldo_atualizado_em?: string
   localizacao?: string
   ativo: boolean
   created_at: string
@@ -107,6 +109,27 @@ export interface CreateProdutoInput {
   id_origem?: string
 }
 
+/**
+ * Campos que o CRUD público (POST/PUT /api/produtos) pode aceitar.
+ * `saldo_atual` é exclusivo da trigger em `movimentacoes` — jamais
+ * aceitar escrita do cliente para evitar drift. `id`/`empresa_id`
+ * vêm da URL/sessão, não do body. `ativo` muda só via DELETE.
+ */
+export const PRODUTO_EDITABLE_FIELDS = [
+  'codigo', 'nome', 'descricao', 'unidade', 'categoria',
+  'ncm', 'gtin', 'preco_custo', 'preco_venda', 'markup_padrao',
+  'estoque_minimo', 'estoque_maximo', 'localizacao',
+  'fonte_id', 'id_origem',
+] as const
+
+function pickEditableFields(body: Record<string, unknown>): Partial<CreateProdutoInput> {
+  const out: Record<string, unknown> = {}
+  for (const key of PRODUTO_EDITABLE_FIELDS) {
+    if (key in body) out[key] = body[key]
+  }
+  return out as Partial<CreateProdutoInput>
+}
+
 export async function createProduto(input: CreateProdutoInput): Promise<Produto> {
   const { data, error } = await supabaseAdmin
     .from('produtos')
@@ -127,7 +150,7 @@ export async function createProduto(input: CreateProdutoInput): Promise<Produto>
 export async function updateProduto(id: number, input: Partial<CreateProdutoInput>): Promise<Produto> {
   const { data, error } = await supabaseAdmin
     .from('produtos')
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update({ ...input })
     .eq('id', id)
     .select()
     .single()
@@ -146,18 +169,20 @@ export async function deleteProduto(id: number): Promise<void> {
   // Soft delete
   const { error } = await supabaseAdmin
     .from('produtos')
-    .update({ ativo: false, updated_at: new Date().toISOString() })
+    .update({ ativo: false })
     .eq('id', id)
 
   if (error) throw error
 }
 
 export const produtosService = {
-  async listarProdutos(params: { fonteId?: string; pagina?: number; limite?: number }) {
-    const { pagina = 1, limite = 50 } = params
+  async listarProdutos(params: { fonteId?: string; pagina?: number; limite?: number; busca?: string; categoria?: string }) {
+    const { pagina = 1, limite = 50, busca, categoria } = params
     const result = await listProdutos({
       page: pagina,
       limit: limite,
+      busca,
+      categoria,
     })
     return {
       produtos: result.data,
@@ -172,11 +197,17 @@ export const produtosService = {
   },
 
   async criarProduto(data: Record<string, unknown>) {
-    return await createProduto(data as CreateProdutoInput)
+    const safe = pickEditableFields(data)
+    if (!safe.codigo || !safe.nome) {
+      throw new Error('Código e Nome são obrigatórios')
+    }
+    // CRUD só cria para a empresa padrão (1). Importações controladas
+    // podem sobreescrever empresa_id via services.createProduto direto.
+    return await createProduto({ empresa_id: 1, ...safe } as CreateProdutoInput)
   },
 
   async atualizarProduto(id: string, data: Record<string, unknown>) {
-    return await updateProduto(parseInt(id), data as Partial<CreateProdutoInput>)
+    return await updateProduto(parseInt(id), pickEditableFields(data))
   },
 
   async deletarProduto(id: string) {
