@@ -11,25 +11,45 @@ Railway pertence ao `tdf-financeiro` e ao `tdf-banco-api`, que são projetos sep
 | Camada | Onde roda |
 |---|---|
 | Frontend | Vercel (`apps/web`, React + Vite, build estático) |
-| Backend | Supabase Edge Functions (alvo) — hoje Fastify local |
+| Backend | Vercel Serverless Functions — hoje Fastify local na 3001 |
 | Banco | Supabase Postgres |
-| Auth | Supabase Auth (alvo) — hoje custom com bcrypt |
+| Auth | Auth custom com bcrypt + tabela `sessoes` |
 
 Se você encontrar `railway.toml`, `Dockerfile` com `EXPOSE 3001`, ou um README dizendo
 Railway, trate como resíduo errado. O `railway.toml` já foi removido em 2026-10-23.
 
+**Não use Edge Functions para a API.** O importador envia XLSX de até 50 MB em base64;
+Edge Functions aceitam 10 MB por requisição, 256 MB de memória e 150 s de execução.
+Os limites estão checados em `docs/PLANO-DEPLOY.md`. A rota alternativa é Edge
+Functions no Supabase, com upload via Storage, e é mais complexa. A decisão é
+Vercel Pro, que dá 800 s por função.
+
+## Documentação
+
+| Documento | O que resolve |
+|---|---|
+| `docs/PLANO-DEPLOY.md` | Arquitetura de deploy, limites reais, ordem de execução, riscos |
+| `docs/PLANO-OPERACAO-AGENTES.md` | Os 12 papéis de agente, como orquestrar, o que depende do que |
+| `docs/README.md` | Índice; separa o que é vigente do que é histórico |
+
+`docs/PLANO-FASE-1-ORIGINAL.md` e `docs/PROMPT-ESTOQUE-ORIGINAL.md` são históricos.
+ foram escritos em outubro/2026 e ainda citam Railway e Edge Functions. Não são
+instrução de deploy.
+
 ## Onde o código diverge do plano
 
-These three gaps are known and open:
+These gaps are known and open:
 
-1. **Sem Edge Functions.** `apps/api/supabase/` contém apenas `migrations/`. A API é
-   Fastify em escuta contínua na porta 3001 (`apps/api/src/server.ts`), com CORS via
-   `@fastify/cors` e `helmet`. Isso não roda na Vercel nem em Edge Functions.
+1. **API não é Serverless ainda.** `apps/api/` é Fastify em escuta contínua na porta
+   3001 (`apps/api/src/server.ts`), com CORS via `@fastify/cors` e `helmet`. Precisa
+   virar handler de Serverless Function da Vercel. É mecânico: `supabase-js` continua
+   funcionando igual, porque fala HTTP com o Postgres.
 2. **Auth custom.** `apps/api/src/services/auth.ts` usa `bcrypt` e a tabela `sessoes`
-   própria, com token hashado. O plano era Supabase Auth.
+   própria, com token hashado. **Decisão de 2026-10-23: manter assim.** Migrar para
+   Supabase Auth não é o gargalo do deploy e introduz risco agora.
 3. **Importador de planilha.** Aceita XLSX de até 50 MB em base64 no corpo da requisição.
-   Edge Functions têm limite de payload muito menor. Vai precisar de upload direto ao
-   Supabase Storage, com a função recebendo a referência do arquivo em vez do bytes.
+   Precisa de upload direto ao Supabase Storage, com a função recebendo a referência
+   do arquivo em vez dos bytes.
 
 ## Bloqueio ativo: qual é o Supabase real
 
